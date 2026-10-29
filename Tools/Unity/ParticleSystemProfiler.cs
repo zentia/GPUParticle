@@ -99,10 +99,22 @@ namespace ZEngine.GPUParticle.Diagnostics
 
         sealed class Slot
         {
+            // 自己存 marker 名：Recorder 有没有 `name` 这个属性各版本不一致，
+            // 别赌它。
+            public string Name;
             public Recorder Recorder;
             public long LastNanoseconds;
             public double AccumulatedMs;
         }
+
+        /// <summary>
+        /// 用不变文化格式化。
+        /// 注意：不能写成 sb.AppendLine(CultureInfo.InvariantCulture, $"...") ——
+        /// StringBuilder 那个 (IFormatProvider, 插值串) 重载依赖
+        /// AppendInterpolatedStringHandler，是 .NET 6 才有的，Unity 2022.3 的
+        /// netstandard2.1 引用程序集里没有 ⇒ 编译不过。走 FormattableString。
+        /// </summary>
+        static string Inv(FormattableString s) { return s.ToString(CultureInfo.InvariantCulture); }
 
         readonly List<Slot> m_Removable = new List<Slot>();
         readonly List<Slot> m_RenderOnly = new List<Slot>();
@@ -133,7 +145,7 @@ namespace ZEngine.GPUParticle.Diagnostics
                 Recorder r = Recorder.Get(n);
                 r.enabled = true;
                 // 先读一次把"启用前"的累计值扣掉
-                slots.Add(new Slot { Recorder = r, LastNanoseconds = r.elapsedNanoseconds, AccumulatedMs = 0.0 });
+                slots.Add(new Slot { Name = n, Recorder = r, LastNanoseconds = r.elapsedNanoseconds, AccumulatedMs = 0.0 });
             }
         }
 
@@ -163,15 +175,13 @@ namespace ZEngine.GPUParticle.Diagnostics
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("================ GPUParticle / ParticleSystem 量测 ================");
-            sb.AppendLine(CultureInfo.InvariantCulture,
-                $"窗口 {windowSeconds:F1}s / {m_Frames} 帧 / 平均 {(windowSeconds / frames * 1000.0):F2} ms 每帧");
+            sb.AppendLine(Inv($"窗口 {windowSeconds:F1}s / {m_Frames} 帧 / 平均 {(windowSeconds / frames * 1000.0):F2} ms 每帧"));
             sb.AppendLine();
             sb.AppendLine("-- A. 粒子耗时（真实 marker）--");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  可省（模拟+几何生成+排序）: {perFrameRemovable:F3} ms/帧");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  省不掉（提交绘制）        : {perFrameRender:F3} ms/帧");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  模块明细合计              : {perFrameModules:F3} ms/帧");
-            sb.AppendLine(CultureInfo.InvariantCulture,
-                $"  >>> 粒子总计约 {perFrameRemovable + perFrameRender:F3} ms/帧（占 {(perFrameRemovable + perFrameRender) / (windowSeconds / frames * 1000.0) * 100.0:F1}% 帧时间）");
+            sb.AppendLine(Inv($"  可省（模拟+几何生成+排序）: {perFrameRemovable:F3} ms/帧"));
+            sb.AppendLine(Inv($"  省不掉（提交绘制）        : {perFrameRender:F3} ms/帧"));
+            sb.AppendLine(Inv($"  模块明细合计              : {perFrameModules:F3} ms/帧"));
+            sb.AppendLine(Inv($"  >>> 粒子总计约 {perFrameRemovable + perFrameRender:F3} ms/帧（占 {(perFrameRemovable + perFrameRender) / (windowSeconds / frames * 1000.0) * 100.0:F1}% 帧时间）"));
             if (!m_RecordersValid)
             {
                 sb.AppendLine("  [警告] Recorder 全为 0 —— 多半不是 Development Build，marker 没编译进去。");
@@ -181,19 +191,19 @@ namespace ZEngine.GPUParticle.Diagnostics
             foreach (Slot s in m_Removable)
             {
                 double ms = s.AccumulatedMs / frames;
-                if (ms > 0.05) sb.AppendLine(CultureInfo.InvariantCulture, $"  [可省] {s.Recorder.name,-48} {ms:F3} ms");
+                if (ms > 0.05) sb.AppendLine(Inv($"  [可省] {s.Name,-48} {ms:F3} ms"));
             }
             foreach (Slot s in m_Modules)
             {
                 double ms = s.AccumulatedMs / frames;
-                if (ms > 0.05) sb.AppendLine(CultureInfo.InvariantCulture, $"  [模块] {s.Recorder.name,-48} {ms:F3} ms");
+                if (ms > 0.05) sb.AppendLine(Inv($"  [模块] {s.Name,-48} {ms:F3} ms"));
             }
             sb.AppendLine();
             sb.AppendLine("-- B/C. 场景里的 System 按可转性分类（按存活粒子数加权）--");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  可直接转 Tier-1 : {m_SysReady,4} 个 / {m_ParticlesReady,8} 粒子 ({Share(m_ParticlesReady)}%)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  要额外做（trail/noise/旋转/mesh）: {m_SysNeedsWork,4} 个 / {m_ParticlesNeedsWork,8} 粒子 ({Share(m_ParticlesNeedsWork)}%)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  转不了（碰撞/触发/子发射器）: {m_SysBlocked,4} 个 / {m_ParticlesBlocked,8} 粒子 ({Share(m_ParticlesBlocked)}%)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  合计            : {m_SysTotal,4} 个 / {m_ParticlesTotal,8} 粒子");
+            sb.AppendLine(Inv($"  可直接转 Tier-1 : {m_SysReady,4} 个 / {m_ParticlesReady,8} 粒子 ({Share(m_ParticlesReady):F1}%)"));
+            sb.AppendLine(Inv($"  要额外做（trail/noise/旋转/mesh）: {m_SysNeedsWork,4} 个 / {m_ParticlesNeedsWork,8} 粒子 ({Share(m_ParticlesNeedsWork):F1}%)"));
+            sb.AppendLine(Inv($"  转不了（碰撞/触发/子发射器）: {m_SysBlocked,4} 个 / {m_ParticlesBlocked,8} 粒子 ({Share(m_ParticlesBlocked):F1}%)"));
+            sb.AppendLine(Inv($"  合计            : {m_SysTotal,4} 个 / {m_ParticlesTotal,8} 粒子"));
             if (m_HotSystems.Count > 0)
             {
                 sb.AppendLine();
@@ -270,7 +280,7 @@ namespace ZEngine.GPUParticle.Diagnostics
             hot.Sort((a, b) => b.count.CompareTo(a.count));
             for (int i = 0; i < hot.Count && i < 10; ++i)
             {
-                m_HotSystems.Add(CultureInfo.InvariantCulture, $"{hot[i].count,7}  {hot[i].name}");
+                m_HotSystems.Add(Inv($"{hot[i].count,7}  {hot[i].name}"));
             }
 
             // Recorder 有效性检查：可省那一组全是 0 就说明 marker 没编进来
@@ -293,11 +303,9 @@ namespace ZEngine.GPUParticle.Diagnostics
         void OnGUI()
         {
             if (!showOverlay) return;
-            GUIStyle style = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                normal = { textColor = Color.white },
-            };
+            GUIStyle style = new GUIStyle(GUI.skin.label);
+            style.fontSize = 12;
+            style.normal.textColor = Color.white;
             GUI.color = Color.black;
             GUI.DrawTexture(new Rect(8, 8, 560, 300), Texture2D.whiteTexture);
             GUI.color = Color.white;
