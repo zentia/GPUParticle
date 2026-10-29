@@ -8,6 +8,14 @@ shader 的机型**上也能跑（GLES3.0 / WebGL2 级）。
 ParticleSystem 之所以到处能跑，是因为它的模拟在 CPU（`Modules/ParticleSystem/
 ParticleSystemGeometryJob.cpp`，SIMD + SoA），GPU 只负责画 billboard。
 
+**首要目标是"用 GPU 换 CPU，优化 Unity 的粒子"** ⇒ 落地形态是 **B**：Unity 侧
+也要跑 Tier-1（自己的渲染器 + shader），不再由 ParticleSystem 模拟。
+"只在 ZEngine 跑 Tier-1、Unity 仍用 ParticleSystem" 是 **A**，A 在 Unity 侧一帧
+不省，**达不到首要目标**，它只是 B 的前置（容器格式 / 曲线语义 / 导入器）。
+
+**做 B 之前必须先量**：见 `doc/UNITY_MEASUREMENT.md` + `Tools/Unity/
+ParticleSystemProfiler.cs`。粒子总计 < 1ms/帧就别做。
+
 ## 一、三档能力分级（一个资产格式、一套模拟语义）
 
 | 档 | 手段 | 需要的能力 | 适用 |
