@@ -1,0 +1,42 @@
+# 构建产物
+[Bb]uild/
+[Bb]uilds/
+bin/
+obj/
+out/
+*.lib
+*.a
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.cmake.tmp
+
+# 对拍夹具（C++ 生成、C# 消费，每次跑都重建）
+gpuparticle_dump/
+
+# VS / IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+*.filters
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 注意：这一条是本仓库自己的约定 —— **不要**写 `*~`。
+# ZEngine 根 .gitignore 里的 `*~`（Unity 临时文件规则）会把整个 `Tests~` 目录
+# 一起忽略掉，本仓库的测试就是在那里，被静默吞过一次。

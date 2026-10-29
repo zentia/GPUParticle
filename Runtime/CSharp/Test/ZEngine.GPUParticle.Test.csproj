@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 跨语言对拍的 C# 侧。跑 net8.0（不是 netstandard2.1）：它是控制台程序，
+       只在 CI / 本机跑，不进 Unity。被引的库仍是 netstandard2.1。 -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>ZEngine.GPUParticle.Test</AssemblyName>
+    <RootNamespace>ZEngine.GPUParticle.Test</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ZEngine.GPUParticle.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -80,13 +80,34 @@ wrap 的，任何语言都能复现（C# 侧必须 `unchecked`）。种子掩码
 载体是 `ParticleGpuSpawn::seed`（float —— 出生记录要走实例属性通道，那条通道没有
 uint），float 只能精确表示到 2^24。
 
-## 六、还没做
+## 六、已做：C# 镜像 + 跨语言对拍
+
+`Runtime/CSharp/` 是 netstandard2.1 的源码镜像（零 Unity API、零 NuGet，整目录
+可拷进 Unity Assets），配 `Runtime/CSharp/Test/` 的对拍程序：
+
+```
+ctest -R ParticleGpuCSharpParityTest   # C++ 落盘 → C# 用自己的实现重算 → 逐字段比
+```
+
+夹具由 `Tests~/ParticleGpuDumpTest` 落盘（256 条出生记录 + 8 个时刻的存活窗口 +
+4 种曲线模式 × 5 个随机器 × 5 个时刻的采样），当前 **4622 项全部一致**。
+
+两条刻意的例外，写在这里免得后来人"修"掉：
+
+- **出生位置用 1e-6 容差而不是逐位比**：它经过 sqrt 归一化，C++ 是
+  `std::sqrt(float)`，C# 是 `MathF.Sqrt`，单精度 sqrt 的跨平台实现允许 1 ulp。
+- **所有 uint 运算必须在 `unchecked` 里**：随机器依赖 uint 溢出 wrap，C# 一旦
+  开了 `<CheckForOverflowUnderflow>` 就抛异常而不是"换个随机序列"——那是静默
+  的视觉差异，很难查。
+
+## 七、还没做
 
 - Unity 导入器：把 ParticleSystem 的模块参数（Main / Shape / Velocity /
   ColorOverLifetime / SizeOverLifetime / Noise / Collision / Trails）烘焙成容器。
   曲线语义必须与 Unity 的 `ParticleSystemCurves.cpp` / `ParticleSystemGradients.cpp`
   对齐（min-max 双曲线、gradient）—— 这是跨语言对拍真正值钱的地方。
-- C# 镜像与逐字节对拍（照 `GPUSpine/Runtime/CSharp` + `RunParityTest.cmake`）。
+- 着色器公式层 `engine/shader/include/particle_sim.h`（与 `spine_skinning.h`
+  同构：一份文件供 GLSL / HLSL / Unity 三消费）+ 对应的 GPU 侧对拍。
 - 碰撞：VS 可以采深度做"一次性贴合"，但不能回写。真碰撞要 Tier 0 / Tier 2，
   所以资产在 cook 期要声明所需 feature 并标出最低档位，设备不满足时降级而不是
   整个特效消失。
