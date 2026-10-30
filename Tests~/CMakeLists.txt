@@ -27,21 +27,9 @@ endfunction()
 gpuparticle_add_test(ParticleGpuCoreTest ParticleGpuCoreTest.cpp)
 add_test(NAME ParticleGpuCoreTest COMMAND ParticleGpuCoreTest)
 
-# ---- 跨语言对拍的 C++ 侧（夹具生成器，不直接断言；由下面那条 ctest 驱动）----
-gpuparticle_add_test(ParticleGpuDumpTest ParticleGpuDumpTest.cpp)
-
-# ---- 跨语言对拍（C++ 落盘 → C# 用自己的实现重算 → 逐字段比对）----
-# 没装 dotnet 就跳过（加码，不是前置条件）。
-find_program(GPUPARTICLE_DOTNET NAMES dotnet)
-option(GPUPARTICLE_BUILD_CSHARP_PARITY_TEST "C++/C# 跨语言对拍" ON)
-if(GPUPARTICLE_BUILD_CSHARP_PARITY_TEST AND GPUPARTICLE_DOTNET)
-    add_test(NAME ParticleGpuCSharpParityTest
-             COMMAND ${CMAKE_COMMAND}
-                     -DDUMP_EXE=$<TARGET_FILE:ParticleGpuDumpTest>
-                     -DDUMP_DIR=${CMAKE_BINARY_DIR}/gpuparticle_dump
-                     -DCSPROJ=${CMAKE_CURRENT_SOURCE_DIR}/../Runtime/CSharp/Test/ZEngine.GPUParticle.Test.csproj
-                     -DDOTNET=${GPUPARTICLE_DOTNET}
-                     -P ${CMAKE_CURRENT_SOURCE_DIR}/../Runtime/CSharp/Test/RunParityTest.cmake)
-else()
-    message(STATUS "GPUParticle: 未提供 dotnet ⇒ 不注册跨语言对拍")
-endif()
+# ---------------------------------------------------------------------
+# 曾经这里有"跨语言对拍"（ParticleGpuDumpTest 落盘 → C# 镜像重算 → 逐字段比），
+# 2026-10 已整目录删除，原因记录在 doc/GPU_PARTICLE_DESIGN.md §六：
+# Unity 侧运行时改成把本库直接编进引擎（引擎内 C++ 烘焙器），C# 镜像不在任何
+# ship 路径上，只剩"第三份拷贝"的维护税。
+# ---------------------------------------------------------------------

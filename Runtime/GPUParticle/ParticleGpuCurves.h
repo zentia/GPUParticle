@@ -10,7 +10,9 @@
 //   - 渐变按 Unity 的 Gradient：颜色键与 alpha 键各自独立插值，两端夹紧
 //     （Unity 的 GradientMode 默认 Blend，超出范围取端点，不循环、不乒乓）。
 //
-// 这里只吃标准库，C# 侧（Runtime/CSharp）逐行镜像，跨语言对拍要求逐位相同。
+// 这里只吃标准库。（曾经有一份 C# 镜像 + 跨语言对拍，2026-10 已删：Unity 侧把
+// 本库直接编进引擎，烘焙器也改成引擎内 C++，曲线语义直接复用 Unity 自己的
+// ParticleSystemCurves.cpp，不再需要"复刻一份再对拍"。见 doc/GPU_PARTICLE_DESIGN.md §六。）
 // =====================================================================
 
 #include "ParticleGpuFormat.h"

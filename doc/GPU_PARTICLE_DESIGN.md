@@ -71,7 +71,7 @@ Libraries/GPUParticle/
 │   ParticleGpuCurves.*     # 曲线 / 渐变（语义对齐 Unity）
 │   ParticleGpuEmitter.*    # 发射调度：O(1) 存活窗口
 │   ParticleGpuBatch.*      # 拼包 + VS 的 CPU 镜像
-├─ Runtime/CSharp/          # netstandard2.1 镜像（第 3 步后半）
+│   ParticleGpuWrite.*      # 容器写出（烘焙侧，ZEngine / Unity 共用一份）
 ├─ Tests~/
 └─ CMakeLists.txt           # GPUParticle::Core，PIC ON
 ```
@@ -88,32 +88,37 @@ wrap 的，任何语言都能复现（C# 侧必须 `unchecked`）。种子掩码
 载体是 `ParticleGpuSpawn::seed`（float —— 出生记录要走实例属性通道，那条通道没有
 uint），float 只能精确表示到 2^24。
 
-## 六、已做：C# 镜像 + 跨语言对拍
+## 六、C# 镜像已删（2026-10）：烘焙器改成引擎内 C++
 
-`Runtime/CSharp/` 是 netstandard2.1 的源码镜像（零 Unity API、零 NuGet，整目录
-可拷进 Unity Assets），配 `Runtime/CSharp/Test/` 的对拍程序：
+曾经有一份 `Runtime/CSharp/`（netstandard2.1 镜像，零 Unity API，整目录可拷进
+Unity Assets）+ 跨语言对拍（4622 项全部一致）。**整目录已删除**，理由是路线变了：
 
-```
-ctest -R ParticleGpuCSharpParityTest   # C++ 落盘 → C# 用自己的实现重算 → 逐字段比
-```
+1. Unity 侧不再走 C#：核心 C++ 直接编进引擎（`External/GPUParticle/`），
+   `Modules/GPUParticle/` 直接调它。C# 镜像不在任何 ship 路径上。
+2. 烘焙器（Unity 导入器）原本打算用 C# 写在 Unity Editor —— 而它必须"复刻"
+   Unity 的曲线/渐变语义，才需要对拍去兜底。现在烘焙器改成**引擎内 C++**
+   （`Modules/GPUParticle/GPUParticleBaker.cpp`），读的就是
+   `ParticleSystemCurves.cpp` / `ParticleSystemGradients.cpp` **同一份代码**，
+   语义天然对齐，"复刻 + 对拍"这整层需求消失。
+3. 于是核心从 3 份拷贝（ZEngine C++ / Unity C++ / C#）降回 2 份（且是同一份
+   文件的两个副本，靠 External/README.md 的"改上游"约定维护）。
 
-夹具由 `Tests~/ParticleGpuDumpTest` 落盘（256 条出生记录 + 8 个时刻的存活窗口 +
-4 种曲线模式 × 5 个随机器 × 5 个时刻的采样），当前 **4622 项全部一致**。
+留下的教训（对拍期间踩到、仍然有效）：
 
-两条刻意的例外，写在这里免得后来人"修"掉：
-
-- **出生位置用 1e-6 容差而不是逐位比**：它经过 sqrt 归一化，C++ 是
-  `std::sqrt(float)`，C# 是 `MathF.Sqrt`，单精度 sqrt 的跨平台实现允许 1 ulp。
-- **所有 uint 运算必须在 `unchecked` 里**：随机器依赖 uint 溢出 wrap，C# 一旦
-  开了 `<CheckForOverflowUnderflow>` 就抛异常而不是"换个随机序列"——那是静默
-  的视觉差异，很难查。
+- **出生位置不能逐位比**：它经过 sqrt 归一化，单精度 sqrt 的跨平台实现允许
+  1 ulp，要比就用 1e-6 容差。
+- **所有 uint 运算必须显式 unchecked**：随机器 `ParticleGpuRandom01` 依赖 uint
+  溢出 wrap；一旦开了溢出检查就不是"换个随机序列"而是抛异常——那是静默的视觉
+  差异，很难查。这条对将来任何移植（Rust / TS / WASM）都成立。
 
 ## 七、还没做
 
-- Unity 导入器：把 ParticleSystem 的模块参数（Main / Shape / Velocity /
+- Unity 导入器（烘焙器）：把 ParticleSystem 的模块参数（Main / Shape / Velocity /
   ColorOverLifetime / SizeOverLifetime / Noise / Collision / Trails）烘焙成容器。
-  曲线语义必须与 Unity 的 `ParticleSystemCurves.cpp` / `ParticleSystemGradients.cpp`
-  对齐（min-max 双曲线、gradient）—— 这是跨语言对拍真正值钱的地方。
+  **位置已定**：`Modules/GPUParticle/GPUParticleBaker.cpp`——**引擎内 C++**，不是
+  C#（见 §六）。曲线语义直接复用 `ParticleSystemCurves.cpp` /
+  `ParticleSystemGradients.cpp`，不需要复刻。容器写出走 core 的
+  `ParticleGpuWrite`（ZEngine 与 Unity 共用同一份 writer，字节必然一致）。
 - 着色器公式层 `engine/shader/include/particle_sim.h`（与 `spine_skinning.h`
   同构：一份文件供 GLSL / HLSL / Unity 三消费）+ 对应的 GPU 侧对拍。
 - 碰撞：VS 可以采深度做"一次性贴合"，但不能回写。真碰撞要 Tier 0 / Tier 2，
