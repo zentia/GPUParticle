@@ -30,6 +30,8 @@ add_library(GPUParticle STATIC
     Runtime/GPUParticle/ParticleGpuBatch.cpp
     Runtime/GPUParticle/ParticleGpuWrite.h
     Runtime/GPUParticle/ParticleGpuWrite.cpp
+    Runtime/GPUParticle/ParticleGpuEmulate.h
+    Runtime/GPUParticle/ParticleGpuEmulate.cpp
 )
 
 target_include_directories(GPUParticle PUBLIC
