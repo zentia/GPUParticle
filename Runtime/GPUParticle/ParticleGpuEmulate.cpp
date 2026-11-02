@@ -214,9 +214,11 @@ bool ParticleGpuEmulateVertex(const ParticleGpuEmulateInput& in, uint32_t quad_i
     float world[4];
     TransformPoint(in.model, local[0], local[1], local[2], world);
 
-    // ---- 8) 公告板角偏移（静态 quad VB 的角序，见头文件注释）----
-    const float cx = (corner == 1u || corner == 2u) ? 1.0f : -1.0f;
-    const float cy = (corner >= 2u) ? 1.0f : -1.0f;
+    // ---- 8) 公告板角偏移（角序的唯一权威：ParticleGpuQuadCorner，
+    //         与 particle_corner_offset 同一份契约）----
+    float cx = 0.0f;
+    float cy = 0.0f;
+    ParticleGpuQuadCorner(corner, cx, cy);
     const float wx = world[0] + in.cam_right[0] * cx * size + in.cam_up[0] * cy * size;
     const float wy = world[1] + in.cam_right[1] * cx * size + in.cam_up[1] * cy * size;
     const float wz = world[2] + in.cam_right[2] * cx * size + in.cam_up[2] * cy * size;
@@ -230,9 +232,8 @@ bool ParticleGpuEmulateVertex(const ParticleGpuEmulateInput& in, uint32_t quad_i
     out.clip_z = clip[2];
     out.clip_w = clip[3];
 
-    // ---- 10) UV（与角序一致）----
-    out.u = (corner == 1u || corner == 2u) ? 1.0f : 0.0f;
-    out.v = (corner >= 2u) ? 1.0f : 0.0f;
+    // ---- 10) UV（与角序一致，同一份契约的 UV 那一半）----
+    ParticleGpuQuadCornerUV(corner, out.u, out.v);
 
     out.r = rgba[0];
     out.g = rgba[1];

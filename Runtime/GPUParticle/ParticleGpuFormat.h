@@ -121,6 +121,18 @@ struct ParticleGpuSpawn
 };
 static_assert(sizeof(ParticleGpuSpawn) == 64, "ParticleGpuSpawn must be 4 x vec4 (64 B)");
 
+// ---- 出生记录上传成纹理时的几何（VTF 通道）----
+// 没有 SSBO 的通道（WebGL2 / GLES3.0）只能把出生记录塞进一张 RGBA32F 纹理，
+// 靠 vertexAttribDivisor 或 texelFetch 取。这份映射是**布局契约**：它完全由
+// sizeof(ParticleGpuSpawn) 推出来，所以和上面那条 static_assert 必须摆在一起
+// —— 以前它只存在于某一个引擎的适配器里，另一边得重新推导一遍（漂移源）。
+static constexpr uint32_t kParticleGpuTexelBytes = 16u;   // RGBA32F 一个 texel
+static constexpr uint32_t kParticleGpuSpawnRecordTexels = sizeof(ParticleGpuSpawn) / kParticleGpuTexelBytes;  // 4
+static constexpr uint32_t kParticleGpuSpawnTextureWidth = kParticleGpuSpawnRecordTexels;  // 横向铺满 ⇒ 一条记录正好一行
+static_assert(kParticleGpuSpawnRecordTexels == 4u, "ParticleGpuSpawn must occupy exactly 4 RGBA32F texels");
+static_assert(sizeof(ParticleGpuSpawn) % kParticleGpuTexelBytes == 0u,
+              "ParticleGpuSpawn must be a whole number of RGBA32F texels");
+
 // ---------------------------------------------------------------------
 // 曲线 / 渐变
 // ---------------------------------------------------------------------
@@ -177,3 +189,59 @@ struct ParticleGpuDrawCmd
     uint32_t flags;
 };
 static_assert(sizeof(ParticleGpuDrawCmd) == 16, "ParticleGpuDrawCmd must be 4 x u32");
+
+// =====================================================================
+// 取址契约（引擎中立，适配器与 CPU 参考实现共用）
+// ---------------------------------------------------------------------
+// 下面三个函数是"数据长什么样"的**推论**，不是某个引擎的 API 翻译。以前它们
+// 各写一份（Unity 在 GPUParticleDrawResources.cpp，ZEngine 那边还没有），
+// 搬到这里是为了让"改了一处忘了另一处"这类静默漂移在核心里就不可能发生。
+//
+// 与公式层的对应关系：
+//   * ParticleGpuQuadCorner / UV  == particle_corner_offset / _uv（particle_sim.h 第 8 节）
+//   * ParticleGpuSpawnRuns        == 环形缓冲绕回的上传分段（纯整数，与
+//                                   particle_ring_slot 同一个 capacity 语义）
+// =====================================================================
+
+// 静态 quad VB 的角序。corner 只取 0..3（= vertexID & 3）。
+// 必须与 particle_corner_offset / ParticleGpuEmulateVertex 逐值一致。
+inline void ParticleGpuQuadCorner(uint32_t corner, float& cx, float& cy)
+{
+    cx = (corner == 1u || corner == 2u) ? 1.0f : -1.0f;
+    cy = (corner >= 2u) ? 1.0f : -1.0f;
+}
+
+inline void ParticleGpuQuadCornerUV(uint32_t corner, float& u, float& v)
+{
+    u = (corner == 1u || corner == 2u) ? 1.0f : 0.0f;
+    v = (corner >= 2u) ? 1.0f : 0.0f;
+}
+
+// 环形缓冲里 [first, first+count) 这一段，绕回后最多拆成两段连续区间。
+// 上传（纹理 / buffer 都适用）按段来：一段一次 memcpy / texSubImage。
+struct ParticleGpuSpawnRun
+{
+    uint32_t slot {0};   // 起始槽位
+    uint32_t count {0};  // 本段槽位数
+};
+
+// 返回段数（0 = 无可传；否则 1 或 2），结果写进 runs[0..1]。
+inline uint32_t ParticleGpuSpawnRuns(uint32_t first, uint32_t count, uint32_t capacity, ParticleGpuSpawnRun runs[2])
+{
+    runs[0] = ParticleGpuSpawnRun {};
+    runs[1] = ParticleGpuSpawnRun {};
+    if (capacity == 0u || count == 0u)
+    {
+        return 0u;
+    }
+    const uint32_t tail = (first + count <= capacity) ? count : (capacity - first);
+    runs[0].slot = first;
+    runs[0].count = tail;
+    if (tail == count)
+    {
+        return 1u;
+    }
+    runs[1].slot = 0u;
+    runs[1].count = count - tail;
+    return 2u;
+}

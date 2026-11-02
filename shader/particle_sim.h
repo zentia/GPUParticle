@@ -224,4 +224,32 @@ PARTICLE_UINT particle_ring_slot(PARTICLE_UINT first, PARTICLE_UINT quad_index, 
     return (first + quad_index) % capacity;
 }
 
+// ===========================================================================
+// 8) quad 角（静态 quad VB 的角序）
+// ===========================================================================
+// 角序是**布局契约**而不是"某个着色器里随手写的数"：静态 quad VB 按这个顺序
+// 生成一次、永不更新，CPU 参考实现与每个引擎的适配器都必须用同一套角序，
+// 否则表现是"粒子贴图上下翻转 / 对角错开"，而 GPU 不报任何错。
+//
+//   0 = (-1,-1) uv(0,0)   1 = ( 1,-1) uv(1,0)
+//   2 = ( 1, 1) uv(1,1)   3 = (-1, 1) uv(0,1)
+//
+// C++ 侧的同一份契约在 ParticleGpuFormat.h（ParticleGpuQuadCorner /
+// ParticleGpuQuadCornerUV），上传用的"环形绕回拆两段"在 ParticleGpuSpawnRuns。
+// 三处改一处必须改全部。
+PARTICLE_FLOAT2 particle_corner_offset(PARTICLE_INT corner)
+{
+    // corner 只取 0..3：越界时 GLSL / HLSL 都不报错，只是取到邻居的角。
+    const float cx = (corner == 1 || corner == 2) ? 1.0 : -1.0;
+    const float cy = (corner >= 2) ? 1.0 : -1.0;
+    return PARTICLE_FLOAT2(cx, cy);
+}
+
+PARTICLE_FLOAT2 particle_corner_uv(PARTICLE_INT corner)
+{
+    const float u = (corner == 1 || corner == 2) ? 1.0 : 0.0;
+    const float v = (corner >= 2) ? 1.0 : 0.0;
+    return PARTICLE_FLOAT2(u, v);
+}
+
 #endif  // ZENGINE_SHADER_INCLUDE_PARTICLE_SIM_H

@@ -72,9 +72,11 @@ struct ParticleGpuEmulatedVertex
 // 模拟"第 quad_index 个 quad 的第 corner 个角"（= vertexID / 4 与 % 4）。
 // 返回 false 只可能是输入不自洽（下标越界 / 该粒子已死 / 表缺失）。
 //
-// 角序与静态 quad VB 一致（Modules/GPUParticle 的 GPUParticleDrawResources）：
+// 角序取自核心的唯一权威 ParticleGpuQuadCorner / ParticleGpuQuadCornerUV
+// （ParticleGpuFormat.h），与着色器侧 particle_corner_offset / particle_corner_uv
+// （particle_sim.h 第 8 节）是同一份契约：
 //   0 = (-1,-1) uv(0,0)   1 = ( 1,-1) uv(1,0)
 //   2 = ( 1, 1) uv(1,1)   3 = (-1, 1) uv(0,1)
-// 改了那边的角序，这里必须跟着改。
+// 任一处改了，三处都要跟着改（单测 ParticleGpuCoreTest 会挡住 C++ 这一侧）。
 bool ParticleGpuEmulateVertex(const ParticleGpuEmulateInput& in, uint32_t quad_index, uint32_t corner,
                               ParticleGpuEmulatedVertex& out);

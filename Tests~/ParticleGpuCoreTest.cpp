@@ -50,6 +50,56 @@ namespace
         }
     }
 
+    // ---- 取址契约（核心里唯一权威，适配器与着色器都照它）--------------------
+    // 角序必须与 particle_corner_offset / particle_corner_uv（particle_sim.h
+    // 第 8 节）逐值相同；这里只能挡住 C++ 这一侧，着色器那一侧由 GPU 对拍挡。
+    void TestQuadCornerContract()
+    {
+        const float kCx[4] = {-1.0f, 1.0f, 1.0f, -1.0f};
+        const float kCy[4] = {-1.0f, -1.0f, 1.0f, 1.0f};
+        const float kU[4] = {0.0f, 1.0f, 1.0f, 0.0f};
+        const float kV[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+        bool ok = true;
+        for (uint32_t c = 0; c < 4u; ++c)
+        {
+            float cx = 0.0f;
+            float cy = 0.0f;
+            float u = 0.0f;
+            float v = 0.0f;
+            ParticleGpuQuadCorner(c, cx, cy);
+            ParticleGpuQuadCornerUV(c, u, v);
+            ok = ok && cx == kCx[c] && cy == kCy[c] && u == kU[c] && v == kV[c];
+        }
+        Check(ok, "quad corner / uv contract (corner 0..3)");
+    }
+
+    // 环形绕回：不绕回 1 段、绕回 2 段，两段加起来必须正好是 count。
+    void TestSpawnRuns()
+    {
+        ParticleGpuSpawnRun runs[2];
+        bool ok = true;
+
+        ok = ok && ParticleGpuSpawnRuns(0u, 0u, 8u, runs) == 0u;
+        ok = ok && ParticleGpuSpawnRuns(2u, 3u, 8u, runs) == 1u &&
+             runs[0].slot == 2u && runs[0].count == 3u;
+        ok = ok && ParticleGpuSpawnRuns(6u, 4u, 8u, runs) == 2u &&
+             runs[0].slot == 6u && runs[0].count == 2u &&
+             runs[1].slot == 0u && runs[1].count == 2u;
+        // 整圈：tail 恰好等于 count，不能多出一段空段
+        ok = ok && ParticleGpuSpawnRuns(0u, 8u, 8u, runs) == 1u && runs[0].count == 8u;
+        // 单槽：起点在最后一格
+        ok = ok && ParticleGpuSpawnRuns(7u, 1u, 8u, runs) == 1u && runs[0].slot == 7u;
+        // 退化：capacity 为 0 一律 0 段（防御除零 / 空缓冲）
+        ok = ok && ParticleGpuSpawnRuns(0u, 5u, 0u, runs) == 0u;
+
+        Check(ok, "spawn ring runs (wrap split)");
+
+        // 上传纹理几何：一条记录必须正好占满一行，否则 texSubImage 会写串行
+        Check(kParticleGpuSpawnTextureWidth == kParticleGpuSpawnRecordTexels &&
+                  sizeof(ParticleGpuSpawn) == static_cast<size_t>(kParticleGpuSpawnRecordTexels) * kParticleGpuTexelBytes,
+              "spawn record fits exactly one texture row");
+    }
+
     ParticleGpuEmitterDesc MakeDesc(float rate, float life, uint32_t capacity)
     {
         ParticleGpuEmitterDesc d {};
@@ -103,6 +153,10 @@ namespace
 
 int main()
 {
+    // ---- 0. 取址契约（角序 / 环形分段 / 上传行宽）----
+    TestQuadCornerContract();
+    TestSpawnRuns();
+
     // ---- 1. 容量检查 ----
     {
         ParticleGpuEmitterDesc d = MakeDesc(100.0f, 1.0f, 256u);
